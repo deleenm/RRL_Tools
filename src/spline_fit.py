@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import scipy.interpolate as interp
-from statsmodels.sandbox.nonparametric.tests.ex_smoothers import weights
+
 
 # -----------------
 # Class Definitions
@@ -65,11 +65,11 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
         
         final_phase.append((bins[i+1]-bins[i])/2 + bins[i])
         idx = ((phase >= bins[i]) & (phase < bins[i+1]))
+        #Select point per bin
         sample_mag = mag[idx]
         sample_err = err[idx]
         
-        
-        if len(idx) == 0:
+        if np.sum(idx) == 0:
             final_mag.append(np.nan)
             final_err.append(np.nan)
             final_num.append(len(idx))
@@ -78,7 +78,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
             if type=='Median':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
-                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,iters=5)).mask)
+                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind]
                     
                 agg = np.nanmedian(sample_mag)
@@ -86,7 +86,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
             if type=='Mean':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
-                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,iters=5)).mask)
+                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind]
                     
                 agg = np.nanmean(sample_mag)
@@ -95,7 +95,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
             if type=='Weighted_Mean':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
-                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,iters=5)).mask)
+                    good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind] 
             
                 (agg,agg_err) = calc_weighted_stat(sample_mag, sample_err)    
@@ -108,7 +108,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
     #Return arrays coverting lists into numpy arrays as necessary
     return (np.array(final_phase),np.array(final_mag),np.array(final_err),final_num,final_clip)
 
-def calc_props(curve_tab,myspline,spline_phase,period):
+def calc_props(curve_tab,myspline,spline_phase,prop_dict,verb=False):
     '''
     Calculates lumin weighted magnitude, mag weighted magnitude, amplitude, Date of max from the Spline etc.
     
@@ -116,14 +116,14 @@ def calc_props(curve_tab,myspline,spline_phase,period):
         curve_tab: The lightcurve Table
         myspline: The Spline Function
         spline_phase: Phase array to go with spline
-        period: period of lightcurve
+        prop_dict: Dictionary of stellar properties to add to
     Keywords:
-    
+        verb: Whether to be verbose
     Returns:
-        Dictionary with these keys: Amplitude, Mag_Min, Mag_Max, Mag_Ave, Flux_Ave, Phase_Max, Epoch_Max
+        Dictionary with these keys added: Amplitude, Mag_Min, Mag_Max, Mag_Ave, Flux_Ave, Phase_Max, Epoch_Max
         
     '''
-    prop_dict = dict()
+    prop_dict
     
     #Calculate Amplitude, Min, Max
     spline_mag = myspline(spline_phase)
@@ -137,7 +137,7 @@ def calc_props(curve_tab,myspline,spline_phase,period):
     
     #Calculate Flux Weighted average
     spline_flux = -2.5*10**spline_mag
-    prop_dict['Flux_Ave'] = np.nanmean(spline_flux)
+    prop_dict['Flux_Ave'] = np.log10(np.nanmean(spline_flux)/-2.5)
     
     #Find Phase of Maximum (Mags work backwards)
     idx = np.nanargmin(spline_mag)
@@ -146,10 +146,25 @@ def calc_props(curve_tab,myspline,spline_phase,period):
     #Date of Maximum
     #Find the middle date of my data and its corresponding cycle
     avg_date = np.nanmean(curve_tab['date'])
-    cycle = np.floor(avg_date/period)
-    prop_dict['Epoch_Max'] = period * (prop_dict['Phase_Max']+cycle)
+    cycle = np.floor(avg_date/prop_dict['Period'])
+    prop_dict['Epoch_Max'] = prop_dict['Period'] * (prop_dict['Phase_Max']+cycle)
     
-    return prop_dict
+    #Create a table that contains the shifted spline values that are also sorted
+    spline_tab = Table()
+    spline_phase_fixed = shift_phase(spline_phase, prop_dict['Phase_Max'])
+    idx = np.argsort(spline_phase_fixed)
+    
+    spline_tab['phase'] = np.concatenate((spline_phase_fixed[idx],spline_phase_fixed[idx] +1))
+    spline_tab['mag'] = np.concatenate((spline_mag[idx],spline_mag[idx]))
+    
+    #Calc the phases for the given dates
+    if prop_dict['Dates'] != None:
+        dates_arr = np.array(prop_dict['Dates'].split(','),dtype='float64')
+        
+        phase_arr = get_phase(dates_arr, prop_dict['Period'], prop_dict['Epoch_Max'])
+        prop_dict['Phases'] = phase_arr
+    
+    return (prop_dict,spline_tab)
 
 def calc_weighted_stat(data,error):
     '''
@@ -174,9 +189,6 @@ def calc_weighted_stat(data,error):
     weighted_std = 1/weight_sq_tot
     
     return (weighted_mean,weighted_std)
-
-
-    
     
     
     
@@ -253,14 +265,14 @@ def get_phase(jd,period,jdmax=None):
     phase[indice] = phase[indice] + 1
     return phase
 
-def make_plot(curve_tab,myspline,spline_phase,prop_dict,pp,agg_tab=None,errorbars=False):
+
+def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
     '''
     Plot curves if requested
     
     Arguments:
         curve_tab: The lightcurve Table
-        myspline: The Spline Function
-        spline_phase: Phase array to go with spline
+        spline_tab: The spline Table
         prop_dict: Dictionary of spline properties
         pp: PDF pointer
     Keywords:
@@ -273,30 +285,58 @@ def make_plot(curve_tab,myspline,spline_phase,prop_dict,pp,agg_tab=None,errorbar
     #Deal with large number of points
     if len(curve_tab['phase']) > 200:
         alpha = 0.2
+        psize = 0.5
+        ptype = '.'
     else:
-        alpha = 1    
+        alpha = 1
+        psize = 2
+        ptype = 'o'    
+    
+    #Correct phases, so phase_max = 0
+    curve_tab['phase_fixed'] = shift_phase(curve_tab['phase'],prop_dict['Phase_Max'])
+    agg_tab['phase_fixed'] = shift_phase(agg_tab['phase'],prop_dict['Phase_Max'])
+    
     
     if type(agg_tab) == type(None):
         #Make plots without aggregated points
+        
         if errorbars:
-            plt.errorbar(curve_tab['phase'],curve_tab['mag'],yerr=curve_tab['err'],marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1)
+            plt.errorbar(curve_tab['phase_fixed'],curve_tab['mag'],yerr=curve_tab['err'],
+                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
+            plt.errorbar(curve_tab['phase_fixed']+1,curve_tab['mag'],yerr=curve_tab['err'],
+                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
         else:
-            plt.plot(curve_tab['phase'],curve_tab['mag'],'.',ms=0.5,alpha=alpha,zorder=1)
+            plt.plot(curve_tab['phase_fixed'],curve_tab['mag'],ptype,ms=psize,alpha=alpha,
+                     zorder=1,color='C0')
+            plt.plot(curve_tab['phase_fixed']+1,curve_tab['mag'],ptype,ms=psize,alpha=alpha,
+                     zorder=1,color='C0')
     else:
         mask = curve_tab['mask']    
         if errorbars:
-            plt.errorbar(curve_tab['phase'],curve_tab['mag'],yerr=curve_tab['err'],marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1)
+            plt.errorbar(curve_tab['phase_fixed'],curve_tab['mag'],yerr=curve_tab['err'],
+                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
+            plt.errorbar(curve_tab['phase_fixed']+1,curve_tab['mag'],yerr=curve_tab['err'],
+                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
         else:
-            plt.plot(curve_tab['phase'][mask],curve_tab['mag'][mask],'.',ms=0.5,alpha=alpha,zorder=1)
-        plt.errorbar(agg_tab['phase'],agg_tab['mag'],yerr=agg_tab['err'],marker='.',ls='None',lw=.75,ms=1.5,zorder=2)
+            plt.plot(curve_tab['phase_fixed'][mask],curve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
+                     zorder=1,color='C0')
+            plt.plot(curve_tab['phase_fixed'][mask]+1,curve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
+                     zorder=1,color='C0')
         
+        plt.errorbar(agg_tab['phase_fixed'],agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
+                     ls='None',lw=.75,ms=psize,zorder=2,color='C1')
+        plt.errorbar(agg_tab['phase_fixed']+1,agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
+                     ls='None',lw=.75,ms=psize,zorder=2,color='C1')
         
-    plt.plot(spline_phase,myspline(spline_phase),'--',zorder=3,color='red')
+    
+    plt.plot(spline_tab['phase'],spline_tab['mag'],'--',zorder=3,color='red')
     plt.xlabel('Phase')
     plt.ylabel('Magnitude')
-    plt.axvline(prop_dict['Phase_Max'])
-    plt.xlim(0,1)
+    plt.axvline(1)
+    plt.xlim(0,2)
     plt.gca().invert_yaxis()
+    plt.title('{} Period: {}\nAmp: {:.3f} Epoch_Max: {:6f}'.format(prop_dict['Starname'],prop_dict['Period'],
+                                                       prop_dict['Amplitude'],prop_dict['Epoch_Max']))
     pp.savefig()
 
 def read_curve(filename):
@@ -308,17 +348,102 @@ def read_curve(filename):
     #mytable.read(filename,format='ascii',names=('jd','mag','err'))
     return mytable
 
+def shift_phase(phase,phase_max):
+    '''
+    Shift a set of phases, so that the the maximum occurs at phase = 0
+    
+    Arguments:
+        phase: Array of phases to be shifted
+        phase_max: The phase of maxiumum in unshifted array
+    Keywords:
+        None
+        
+    Returns:
+        A numpy array of shifted phases
+    '''
+    
+    new_phase = phase - phase_max
+    indice = (new_phase < 0)
+    new_phase[indice] = new_phase[indice] + 1
+    return new_phase
+
+
+def write_log(base,prop_dict,verb=False):
+    #Open Logfile
+    try:
+        logname = base + ".slog"
+        logfile = open(logname,'w')
+    except IOError:
+        print("{} could not be opened!".format(logname))
+
+    #Write out header
+    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,"
+    header = header + "Factor,Method,Order,Npts,Sigmaclip\n"
+    if prop_dict['Dates'] != None:
+        header = header + "Phases"
+    logfile.write(header)
+    
+    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],prop_dict['Period'],
+                                                        prop_dict['Mag_Max'],prop_dict['Mag_Min'],
+                                                        prop_dict['Amplitude'],prop_dict['Mag_Ave'],
+                                                        prop_dict['Flux_Ave'],
+                                                        prop_dict['Epoch_Max'],prop_dict['Factor'],
+                                                        prop_dict['Method'],prop_dict['Order'],
+                                                        prop_dict['Npts'],prop_dict['Sigclip'])
+    
+    if prop_dict['Dates'] != None:
+        data = data + " " + np.array2string(prop_dict['Phases'],separator=';')
+    
+        if verb:
+            for i in range(len(prop_dict['Dates'])):              
+                print("{} {}".format(prop_dict['Dates'][i],prop_dict['Phases'][i]))
+        
+    
+    logfile.write(data)
+    
+    logfile.close()
+
+def write_spline(base,spline_tab):
+    #Open Logfile
+    try:
+        filename = base + ".spl"
+        splfile = open(filename,'w')
+    except IOError:
+        print("{} could not be opened!".format(filename))
+
+    #Write out header
+    header = "#Phase,Mag\n"
+    
+    splfile.write(header)
+    
+    for i in range(len(spline_tab)):
+        splfile.write("{:.3f},{:.3f}\n".format(spline_tab['phase'][i],spline_tab['mag'][i]))
+    
+    splfile.close()
+
 
 # -------------
 # Main Function
 # -------------
-def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=None,plot=False,method="Median",npts=10
-                    ,order=3,sigclip=None,verb=False):
+def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=None,plot=False,
+                    method="Median",npts=10,order=3,sigclip=None,verb=False):
     #Set base filename
     if base == None:
         base = os.path.splitext(filename)[0]
     
     curve_tab = read_curve(filename)
+
+    prop_dict = dict()
+    prop_dict['Period'] = period
+    prop_dict['Basename'] = base
+    prop_dict['Starname'] = os.path.basename(base)
+    prop_dict['Factor'] = factor
+    prop_dict['Method'] = method
+    prop_dict['Order'] = order
+    prop_dict['Npts'] = npts
+    prop_dict['Sigclip'] = sigclip
+    prop_dict['Dates'] = dates
+
     #Check to make sure all dates are unique
     if len(curve_tab['date']) != len(np.unique(curve_tab['date'])):
         print("You have identical dates in your light curve!")
@@ -342,41 +467,42 @@ def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=Non
         extend_num = int(np.floor(len(agg_tab['phase'])/10))
         myspline = get_spline(agg_tab['phase'],agg_tab['mag'], agg_tab['err']*factor,order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,npts*10)
-        prop_dict = calc_props(curve_tab, myspline, spline_phase, period)
-        
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,verb=verb)        
         if plot:
-            make_plot(curve_tab, myspline, spline_phase, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars) 
+            make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars) 
             
     else:
         #Fit Spline
         extend_num = int(np.floor(len(curve_tab['phase'])/10))
         myspline = get_spline(curve_tab['phase'],curve_tab['mag'], curve_tab['err'],order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,len(curve_tab['phase'])*10)
-        prop_dict = calc_props(curve_tab, myspline, spline_phase, period)
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,verb=verb)
         if plot:
-            make_plot(curve_tab, myspline, spline_phase, prop_dict, pp, errorbars=errorbars) 
+            make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars) 
     
     if verb:        
-        print("{} Amplitude: {:.3f} {:.6f}".format(filename,prop_dict['Amplitude'],prop_dict['Epoch_Max']))
+        print("{} Amplitude: {:.3f} Epoch Maximum: {:.6f}".format(filename,
+                                                                  prop_dict['Amplitude'],prop_dict['Epoch_Max']))
     
+    write_log(base,prop_dict,verb=verb)
+    write_spline(base,spline_tab)
 
     if plot:
         pp.close()
 
 if __name__ == '__main__':
     #Check to make sure we have 1 argument
-
     parser = argparse.ArgumentParser(description='Fits a Spline to a lightcurve.')
     parser.add_argument('filename',help='3 column light curve file JD Magnitude Error')
     parser.add_argument('period',type=float,help='The period to phase the light curve.')
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the pdf and log files.")
-    parser.add_argument('-d',type=float,default=None,metavar='DATE1,DATE2,etc'
-                        ,help='Comma separated list of Date(s) of interest. (Default None)')
+    parser.add_argument('-d',type=str,default=None,metavar='DATE1,DATE2,etc'
+                        ,help='Comma separated list of Date(s) to change into phases. (Default None)')
     parser.add_argument('-e', action='store_true',help="Show errorbars on Data")
     parser.add_argument('-f', default=1,type=float,metavar="FACTOR",help="Factor to tighten errorbars on aggregate 0 to 1 (Default 1)")
     parser.add_argument('-m', metavar='METHOD',default="None"
-                        ,help="Method to aggregate points: Mean, Median, Weighted_Mean, or None (Default None)")
-    parser.add_argument('-n', default=20,type=float,metavar="NUM",help="Number of aggregate points to break data into (Default 20)")
+                        ,help="Method to aggregate points: Mean, Median, Weighted_Mean, or None (Default None (e.g. no binning)")
+    parser.add_argument('-n', default=20,type=int,metavar="NUM",help="Number of aggregate points to break data into.(Default 20)")
     parser.add_argument('-o', default=3,type=int,metavar="ORDER",help="Spline order betwee 1 and 5 (Default 3)")
     parser.add_argument('-s', default=None,type=float,metavar="SIGMA"
                         ,help="Sigmas used in sigma clipping. None for no sigma clipping (Default None)")
