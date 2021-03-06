@@ -332,11 +332,16 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
     plt.plot(spline_tab['phase'],spline_tab['mag'],'--',zorder=3,color='red')
     plt.xlabel('Phase')
     plt.ylabel('Magnitude')
-    plt.axvline(1)
+    plt.axvline(1) #Epoch of Maximum
     plt.xlim(0,2)
     plt.gca().invert_yaxis()
     plt.title('{} Period: {}\nAmp: {:.3f} Epoch_Max: {:6f}'.format(prop_dict['Starname'],prop_dict['Period'],
                                                        prop_dict['Amplitude'],prop_dict['Epoch_Max']))
+    
+    if prop_dict['Dates'] != None:
+        for phase in prop_dict['Phases']:
+            plt.axvline(phase,ls='--',c='k')
+    
     pp.savefig()
 
 def read_curve(filename):
@@ -378,9 +383,12 @@ def write_log(base,prop_dict,verb=False):
 
     #Write out header
     header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,"
-    header = header + "Factor,Method,Order,Npts,Sigmaclip\n"
+    header = header + "Factor,Method,Order,Npts,Sigmaclip"
     if prop_dict['Dates'] != None:
-        header = header + "Phases"
+        header = header + ",Phases\n"
+    else:
+        header = header + "\n"
+        
     logfile.write(header)
     
     data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],prop_dict['Period'],
@@ -392,7 +400,7 @@ def write_log(base,prop_dict,verb=False):
                                                         prop_dict['Npts'],prop_dict['Sigclip'])
     
     if prop_dict['Dates'] != None:
-        data = data + " " + np.array2string(prop_dict['Phases'],separator=';')
+        data = data + "," + np.array2string(prop_dict['Phases'],separator=';') + '\n'
     
         if verb:
             for i in range(len(prop_dict['Dates'])):              

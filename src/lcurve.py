@@ -61,8 +61,11 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
     try:
         date,mag,err = np.genfromtxt(curve,unpack=True)
     except:
-        print("Cannot open: {}".format(curve) )
-        return(1)
+        try:
+            date,mag,err,phase = np.genfromtxt(curve,unpack=True)
+        except:
+            print("Cannot open: {}".format(curve) )
+            return(1)
 
     #Clean up the data
     if(clean != 0):
