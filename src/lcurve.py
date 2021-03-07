@@ -87,11 +87,19 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
     date = date[good_date_idx]
     mag = mag[good_date_idx]
     err = err[good_date_idx]
+
+    #Set the point size depeding on the number of data points
+    if len(date) < 100:
+        myptsize = 3
+        myformat = 'o'
+    else:
+        myptsize = 1
+        myformat = '.'   
     
     if len(date) == 0:
         plt.figure(figsize=(8.5,11))
         plt.title(titlestring)
-        plt.plot(date,mag,'.',ms=1,c="blue",rasterized=True)
+        plt.plot(date,mag,myformat,ms=myptsize,c="blue",rasterized=True)
         plt.text(0,0,"No Lightcurves")
         plt.ylabel("Magnitude")
         plt.xlabel("Date")
@@ -225,7 +233,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
     f.subplots_adjust(hspace=0.3,top=0.94,bottom=0.05)
     plt.suptitle(titlestring)
     axarr[0,0].set_title("Data")
-    axarr[0,0].plot(date,mag,'.',ms=1,c="blue",rasterized=True)
+    axarr[0,0].plot(date,mag,myformat,ms=myptsize,c="blue",rasterized=True)
     axarr[0,0].set_ylabel("KELT Magnitude")
     axarr[0,0].set_xlabel("Date")
     axarr[0,0].invert_yaxis()
@@ -246,12 +254,12 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
 
     #Period1
     axarr[1,0].set_title("{} Period1: {}".format(ttype,lsperiod1))
-    axarr[1,0].plot(lsphase1,nmag,'.',ms=1,c="green",rasterized=True)
+    axarr[1,0].plot(lsphase1,nmag,myformat,ms=myptsize,c="green",rasterized=True)
     axarr[1,0].set_xlabel("Phase")
     axarr[1,0].invert_yaxis()
     #Period1
     axarr[1,1].set_title("{} Period2: {}".format(ttype,lsperiod2))
-    axarr[1,1].plot(lsphase2,nmag,'.',ms=1,c="green",rasterized=True)
+    axarr[1,1].plot(lsphase2,nmag,myformat,ms=myptsize,c="green",rasterized=True)
     axarr[1,1].set_xlabel("Phase")
     axarr[1,1].invert_yaxis()  
     

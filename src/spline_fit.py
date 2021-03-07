@@ -346,7 +346,16 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
 
 def read_curve(filename):
     mytable = Table()
-    date,mag,err = np.genfromtxt(filename,unpack=True)
+    #Open file        
+    try:
+        date,mag,err = np.genfromtxt(filename,unpack=True)
+    except:
+        try:
+            date,mag,err,phase = np.genfromtxt(filename,unpack=True)
+        except:
+            print("Cannot open: {}".format(filename) )
+            return(1)
+
     mytable['date'] = date
     mytable['mag'] = mag
     mytable['err'] = err
@@ -391,7 +400,8 @@ def write_log(base,prop_dict,verb=False):
         
     logfile.write(header)
     
-    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],prop_dict['Period'],
+    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
+                                                        prop_dict['Period'],
                                                         prop_dict['Mag_Max'],prop_dict['Mag_Min'],
                                                         prop_dict['Amplitude'],prop_dict['Mag_Ave'],
                                                         prop_dict['Flux_Ave'],
@@ -400,11 +410,12 @@ def write_log(base,prop_dict,verb=False):
                                                         prop_dict['Npts'],prop_dict['Sigclip'])
     
     if prop_dict['Dates'] != None:
-        data = data + "," + np.array2string(prop_dict['Phases'],separator=';') + '\n'
+        data = data + ",[{}],".format(prop_dict['Dates'].replace(',',';')) + np.array2string(prop_dict['Phases'],separator=';') + '\n'
     
         if verb:
-            for i in range(len(prop_dict['Dates'])):              
-                print("{} {}".format(prop_dict['Dates'][i],prop_dict['Phases'][i]))
+            dates_arr = np.array(prop_dict['Dates'].split(','),dtype='float64')
+            for i in range(len(dates_arr)):              
+                print("{} {}".format(dates_arr[i],prop_dict['Phases'][i]))
         
     
     logfile.write(data)
