@@ -80,17 +80,21 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind]
-                    
+                
+                totalgood = np.sum(np.isfinite(sample_mag))   
                 agg = np.nanmedian(sample_mag)
-                agg_err = np.nanstd(sample_mag)
+                #This is the standard error of the mean
+                agg_err = np.nanstd(sample_mag) / np.sqrt(totalgood)
             if type=='Mean':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind]
-                    
+                
+                totalgood = np.sum(np.isfinite(sample_mag))    
                 agg = np.nanmean(sample_mag)
-                agg_err = np.nanstd(sample_mag)   
+                #This is the standard error of the mean
+                agg_err = np.nanstd(sample_mag) / np.sqrt(totalgood) 
                 
             if type=='Weighted_Mean':
                 if sigclip != None:
