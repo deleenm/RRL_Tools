@@ -144,6 +144,10 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,upper=None,verb=False):
     idx = np.nanargmin(spline_mag)
     prop_dict['Phase_Max'] = spline_phase[idx]
     
+    #Find Phase of Minimum (Mags work backwards)
+    idx = np.nanargmax(spline_mag)
+    prop_dict['Phase_Min'] = spline_phase[idx] 
+      
     #Date of Maximum
     if upper == None:
         #Find the middle date of my data and its corresponding cycle
@@ -160,6 +164,23 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,upper=None,verb=False):
             prop_dict['Epoch_Max'] = ljdmax
         else:
             prop_dict['Epoch_Max'] = hjdmax 
+            
+    #Date of Minimum
+    if upper == None:
+        #Find the middle date of my data and its corresponding cycle
+        avg_date = np.nanmean(curve_tab['date'])
+        cycle = np.floor(avg_date/prop_dict['Period'])
+        prop_dict['Epoch_Min'] = prop_dict['Period'] * (prop_dict['Phase_Min']+cycle)
+    else:
+        #Find the cycle closest to my upper JD. Try the one less than my date and one above my date
+        lcycle = np.floor(upper/prop_dict['Period'])
+        hcycle = np.floor(upper/prop_dict['Period'])+1
+        ljdmax = prop_dict['Period'] * (prop_dict['Phase_Min']+lcycle)
+        hjdmax = prop_dict['Period'] * (prop_dict['Phase_Min']+hcycle)
+        if np.abs(ljdmax - upper) < np.abs(hjdmax - upper):
+            prop_dict['Epoch_Min'] = ljdmax
+        else:
+            prop_dict['Epoch_Min'] = hjdmax 
     
     #Create a table that contains the shifted spline values that are also sorted
     spline_tab = Table()
@@ -403,7 +424,7 @@ def write_log(base,prop_dict,verb=False):
         print("{} could not be opened!".format(logname))
 
     #Write out header
-    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,"
+    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min"
     header = header + "Factor,Method,Order,Npts,Sigmaclip"
     if prop_dict['Dates'] != None:
         header = header + ",Phases\n"
@@ -412,12 +433,12 @@ def write_log(base,prop_dict,verb=False):
         
     logfile.write(header)
     
-    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
+    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
                                                         prop_dict['Period'],
                                                         prop_dict['Mag_Max'],prop_dict['Mag_Min'],
                                                         prop_dict['Amplitude'],prop_dict['Mag_Ave'],
-                                                        prop_dict['Flux_Ave'],
-                                                        prop_dict['Epoch_Max'],prop_dict['Factor'],
+                                                        prop_dict['Flux_Ave'], prop_dict['Epoch_Max'],
+                                                        prop_dict['Epoch_Min'], prop_dict['Factor'],
                                                         prop_dict['Method'],prop_dict['Order'],
                                                         prop_dict['Npts'],prop_dict['Sigclip'])
     
