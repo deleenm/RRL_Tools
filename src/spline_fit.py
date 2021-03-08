@@ -108,7 +108,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
     #Return arrays coverting lists into numpy arrays as necessary
     return (np.array(final_phase),np.array(final_mag),np.array(final_err),final_num,final_clip)
 
-def calc_props(curve_tab,myspline,spline_phase,prop_dict,verb=False):
+def calc_props(curve_tab,myspline,spline_phase,prop_dict,upper=None,verb=False):
     '''
     Calculates lumin weighted magnitude, mag weighted magnitude, amplitude, Date of max from the Spline etc.
     
@@ -117,6 +117,7 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,verb=False):
         myspline: The Spline Function
         spline_phase: Phase array to go with spline
         prop_dict: Dictionary of stellar properties to add to
+        upper: A JD around which to find the Epoch of Maximum
     Keywords:
         verb: Whether to be verbose
     Returns:
@@ -144,10 +145,21 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,verb=False):
     prop_dict['Phase_Max'] = spline_phase[idx]
     
     #Date of Maximum
-    #Find the middle date of my data and its corresponding cycle
-    avg_date = np.nanmean(curve_tab['date'])
-    cycle = np.floor(avg_date/prop_dict['Period'])
-    prop_dict['Epoch_Max'] = prop_dict['Period'] * (prop_dict['Phase_Max']+cycle)
+    if upper == None:
+        #Find the middle date of my data and its corresponding cycle
+        avg_date = np.nanmean(curve_tab['date'])
+        cycle = np.floor(avg_date/prop_dict['Period'])
+        prop_dict['Epoch_Max'] = prop_dict['Period'] * (prop_dict['Phase_Max']+cycle)
+    else:
+        #Find the cycle closest to my upper JD. Try the one less than my date and one above my date
+        lcycle = np.floor(upper/prop_dict['Period'])
+        hcycle = np.floor(upper/prop_dict['Period'])+1
+        ljdmax = prop_dict['Period'] * (prop_dict['Phase_Max']+lcycle)
+        hjdmax = prop_dict['Period'] * (prop_dict['Phase_Max']+hcycle)
+        if np.abs(ljdmax - upper) < np.abs(hjdmax - upper):
+            prop_dict['Epoch_Max'] = ljdmax
+        else:
+            prop_dict['Epoch_Max'] = hjdmax 
     
     #Create a table that contains the shifted spline values that are also sorted
     spline_tab = Table()
@@ -444,8 +456,8 @@ def write_spline(base,spline_tab):
 # -------------
 # Main Function
 # -------------
-def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=None,plot=False,
-                    method="Median",npts=10,order=3,sigclip=None,verb=False):
+def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1, method="Median",
+                   npts=10,order=3,plot=False,sigclip=None,upper=None,verb=False):
     #Set base filename
     if base == None:
         base = os.path.splitext(filename)[0]
@@ -486,7 +498,7 @@ def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=Non
         extend_num = int(np.floor(len(agg_tab['phase'])/10))
         myspline = get_spline(agg_tab['phase'],agg_tab['mag'], agg_tab['err']*factor,order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,npts*10)
-        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,verb=verb)        
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,upper=upper,verb=verb)        
         if plot:
             make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars) 
             
@@ -495,7 +507,7 @@ def spline_fit_main(filename,period,dates=None,factor=1,errorbars=False,base=Non
         extend_num = int(np.floor(len(curve_tab['phase'])/10))
         myspline = get_spline(curve_tab['phase'],curve_tab['mag'], curve_tab['err'],order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,len(curve_tab['phase'])*10)
-        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,verb=verb)
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,upper=upper,verb=verb)
         if plot:
             make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars) 
     
@@ -526,14 +538,15 @@ if __name__ == '__main__':
     parser.add_argument('-s', default=None,type=float,metavar="SIGMA"
                         ,help="Sigmas used in sigma clipping. None for no sigma clipping (Default None)")
     parser.add_argument('-p', action='store_true',help="Generate plots")
+    parser.add_argument('-u',default=None,type=float,metavar='JD',help='Find the epoch of maximum closest to this JD.')
     parser.add_argument('-v', action='store_true',help="Be Verbose")
 
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = spline_fit_main(args['filename'],args['period'],dates=args['d'],factor=args['f'],errorbars=args['e']
-                          ,plot=args['p'],method=args['m'],npts=args['n'],order=args['o'],sigclip=args['s'],verb=args['v']
-                          ,base=args['b'])
+    ret = spline_fit_main(args['filename'],args['period'],base=args['b'],dates=args['d'],errorbars=args['e']
+                          ,factor=args['f'],method=args['m'],npts=args['n'],order=args['o'],plot=args['p']
+                          ,sigclip=args['s'],upper=args['u'],verb=args['v'])
     sys.exit(0)
     
 ##
