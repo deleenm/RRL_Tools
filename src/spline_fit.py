@@ -482,7 +482,7 @@ def write_spline(base,spline_tab):
 # Main Function
 # -------------
 def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1, method="Median",
-                   npts=10,order=3,plot=False,sigclip=None,upper=None,verb=False):
+                   npts=10,order=3,plot=False,ret_results=False,sigclip=None,upper=None,verb=False):
     #Set base filename
     if base == None:
         base = os.path.splitext(filename)[0]
@@ -545,6 +545,8 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
 
     if plot:
         pp.close()
+    if ret_results:
+        return prop_dict
 
 if __name__ == '__main__':
     #Check to make sure we have 1 argument
@@ -571,7 +573,7 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
     ret = spline_fit_main(args['filename'],args['period'],base=args['b'],dates=args['d'],errorbars=args['e']
                           ,factor=args['f'],method=args['m'],npts=args['n'],order=args['o'],plot=args['p']
-                          ,sigclip=args['s'],upper=args['u'],verb=args['v'])
+                          ,ret_results=False,sigclip=args['s'],upper=args['u'],verb=args['v'])
     sys.exit(0)
     
 ##
