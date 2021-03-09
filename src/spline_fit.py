@@ -51,7 +51,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
         
     Returns:
         A tuple of five numpy arrays. The first four give the phase,mag,err,num for each aggregate point. Num is the number of data points 
-        in each aggregate point. The final array is a boolean array that gives the masking for the phase array.
+        in each aggregate point. The err depends on the method used. The final array is a boolean array that gives the masking for the phase array.
     '''
     
     bins = np.linspace(0,1,num)

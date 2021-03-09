@@ -34,7 +34,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 # --------------------
 # Function Definitions
 # --------------------
-def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
+def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
     '''
     Plot up a phased light curve based on a raw light curve adds plot to pdf object
     
@@ -44,10 +44,11 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
         pp: PDF Object
     Keywords:
         clean: How many maximum and minimum points to remove
+        ret_results: If True, return the results of the period search
         tdict: A Dictionary of info to put in the title of the plots
         type: Type of periodogram finder (ls or aov).
     Returns:
-        None
+        None unless ret_results is True, then returns a tuple of results (Filename,Starname,Type,Period1,Period2)
     '''
 
     retval = 0
@@ -271,12 +272,29 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,type='ls'):
     
     logfile.close()
     
-    return(retval) 
+    if ret_results == True:
+        return((curve,name,type,lsperiod1,lsperiod2))
+    else:
+        return(retval) 
 
 # -------------
 # Main Function
 # -------------
-def lcurve_main(filename,basename=None,type='ls'):
+def lcurve_main(filename,basename=None,type='ls',ret_results=False,verb=False):
+    '''
+    Does a period search on a variable curve using the vartools package
+    
+    Arguments:
+        filename: Curve file to be searched
+    Keywords:
+        basename: Give a basename for the output .pdf and log file.
+        type: Type of period search aov,fchi2,ls default (ls).
+        ret_results: If True, return the results that would normally go to a log file.
+        verb: If True, increase verbosity
+        
+    Returns:
+        0 for success. If ret_results is True, then returns a tuple of results.
+    '''
     
     #Get New Filename
     if basename == None:
@@ -285,12 +303,16 @@ def lcurve_main(filename,basename=None,type='ls'):
         base = basename
         
     newfilename = base+".pdf"
-    print("Output Filename: {}".format(newfilename))
+    if verb==True:
+        print("Output Filename: {}".format(newfilename))
     
     pp = PdfPages('{}'.format(newfilename))
-    plot_lc(filename,base,pp,clean=10,tdict=False,type=type)
+    results = plot_lc(filename,base,pp,clean=10,ret_results=ret_results,tdict=False,type=type)
     
     pp.close()
+    
+    if ret_results == True:
+        return results
 
 if __name__ == '__main__':
     #Setup command line arguments
@@ -299,11 +321,11 @@ if __name__ == '__main__':
     parser.add_argument('Filename',help='Lightcurve file')
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the output .pdf and log file.")
     parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls default (ls).")
-    
+    parser.add_argument('-v', action='store_true',help="Increase verbosity")
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = lcurve_main(args['Filename'],basename=args['b'],type=args['t'])
+    ret = lcurve_main(args['Filename'],basename=args['b'],ret_results=False,type=args['t'],verb=args['v'])
     sys.exit(0)
     
 ##
