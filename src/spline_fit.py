@@ -430,10 +430,10 @@ def write_log(base,prop_dict,verb=False):
         print("{} could not be opened!".format(logname))
 
     #Write out header
-    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min"
+    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min,"
     header = header + "Factor,Method,Order,Npts,Sigmaclip"
     if prop_dict['Dates'] != None:
-        header = header + ",Phases\n"
+        header = header + ",Dates,Phases\n"
     else:
         header = header + "\n"
         
