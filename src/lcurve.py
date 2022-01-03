@@ -34,7 +34,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 # --------------------
 # Function Definitions
 # --------------------
-def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
+def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0.1, max=10.0):
     '''
     Plot up a phased light curve based on a raw light curve adds plot to pdf object
     
@@ -122,7 +122,8 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
     if(type == 'ls'):
         ttype = "Lomb-Scargle"
         #should rewrite to communicate directly
-        lstool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../ls.stat -header -LS 0.1 10. 0.1 2 1 ../ whiten clip 5. 1"],shell=True)
+        lstool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../ls.stat -header " + 
+                        "-LS {} {} 0.1 2 1 ../ whiten clip 5. 1".format(min,max)],shell=True)
         lstool.wait()
         
         try:
@@ -149,7 +150,8 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
     
     if(type == 'aov'):
         ttype = 'AOV'
-        aovtool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../aov.stat -header -aov Nbin 20 0.1 10. 0.1 0.01 2 1 ../ whiten clip 5. 1"],shell=True)
+        aovtool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../aov.stat -header -aov Nbin 20 " +
+                         "0.1 10. 0.1 0.01 2 1 ../ whiten clip 5. 1".format(min,max)],shell=True)
         aovtool.wait()
     
         try:
@@ -179,7 +181,10 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
         
     if(type == 'fchi2'):
         ttype = 'FChi2'
-        aovtool = Popen(["vartools -L /usr/local/share/vartools/USERLIBS/fastchi2.la -i ../temp_lc.cur -ascii -redirectstats ../fchi2.stat -header -fastchi2 Nharm fix 3 freqmax fix 10 freqmin fix .1 oversample fix 10 Npeak 2 oper ../"],shell=True)
+        aovtool = Popen(["vartools -L /usr/local/share/vartools/USERLIBS/fastchi2.la -i ../temp_lc.cur " +
+                         "-ascii -redirectstats ../fchi2.stat -header -fastchi2 " +
+                         "Nharm fix 3 freqmax fix {} freqmin fix {} ".format(1/min, 1/max) +
+                         "oversample fix 10 Npeak 2 oper ../"],shell=True)
         aovtool.wait()
     
         try:
@@ -222,7 +227,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
         print("{} could not be opened!".format(filename))
 
     #Write out header
-    header = "#Filename,Starname,Type,Period1,Period2\n"
+    header = "#Filename,Starname,Type,Min_Period,Max_Period,Period1,Period2\n"
     
     logfile.write(header)
 
@@ -264,7 +269,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
     axarr[1,1].set_xlabel("Phase")
     axarr[1,1].invert_yaxis()  
     
-    logfile.write("{},{},{},{},{}".format(curve,name,type,lsperiod1,lsperiod2))
+    logfile.write("{},{},{},{},{},{},{}".format(curve,name,type,min,max,lsperiod1,lsperiod2))
     
     pp.savefig(dpi=200)
     plt.clf()
@@ -280,7 +285,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls'):
 # -------------
 # Main Function
 # -------------
-def lcurve_main(filename,basename=None,type='ls',ret_results=False,verb=False):
+def lcurve_main(filename,basename=None,max=10.0,min=0.1,type='ls',ret_results=False,verb=False):
     '''
     Does a period search on a variable curve using the vartools package
     
@@ -307,7 +312,7 @@ def lcurve_main(filename,basename=None,type='ls',ret_results=False,verb=False):
         print("Output Filename: {}".format(newfilename))
     
     pp = PdfPages('{}'.format(newfilename))
-    results = plot_lc(filename,base,pp,clean=10,ret_results=ret_results,tdict=False,type=type)
+    results = plot_lc(filename,base,pp,clean=10,ret_results=ret_results,tdict=False,type=type,min=min,max=max)
     
     pp.close()
     
@@ -320,12 +325,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert KELT Terrestrial Time Light Curves to BJD_TBD Light Curves')
     parser.add_argument('Filename',help='Lightcurve file')
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the output .pdf and log file.")
-    parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls default (ls).")
+    parser.add_argument('-m', default=10.0,metavar="MAX",type=float ,help="Maximum Period to search in days (Default 10.0).")
+    parser.add_argument('-n', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")
+    parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls (Default ls).")
     parser.add_argument('-v', action='store_true',help="Increase verbosity")
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = lcurve_main(args['Filename'],basename=args['b'],ret_results=False,type=args['t'],verb=args['v'])
+    ret = lcurve_main(args['Filename'],basename=args['b'],max=args['m'],min=args['n'],ret_results=False,
+                      type=args['t'],verb=args['v'])
     sys.exit(0)
     
 ##
