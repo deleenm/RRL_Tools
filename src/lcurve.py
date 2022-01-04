@@ -151,7 +151,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0
     if(type == 'aov'):
         ttype = 'AOV'
         aovtool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../aov.stat -header -aov Nbin 20 " +
-                         "0.1 10. 0.1 0.01 2 1 ../ whiten clip 5. 1".format(min,max)],shell=True)
+                         "{} {} 0.1 0.01 2 1 ../ whiten clip 5. 1".format(min,max)],shell=True)
         aovtool.wait()
     
         try:
@@ -181,11 +181,11 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0
         
     if(type == 'fchi2'):
         ttype = 'FChi2'
-        aovtool = Popen(["vartools -L /usr/local/share/vartools/USERLIBS/fastchi2.la -i ../temp_lc.cur " +
+        fchi2tool = Popen(["vartools -L /usr/local/share/vartools/USERLIBS/fastchi2.la -i ../temp_lc.cur " +
                          "-ascii -redirectstats ../fchi2.stat -header -fastchi2 " +
                          "Nharm fix 3 freqmax fix {} freqmin fix {} ".format(1/min, 1/max) +
                          "oversample fix 10 Npeak 2 oper ../"],shell=True)
-        aovtool.wait()
+        fchi2tool.wait()
     
         try:
             lsstat = Table.read("../fchi2.stat",format='ascii')
