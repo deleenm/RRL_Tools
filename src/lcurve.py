@@ -325,15 +325,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert KELT Terrestrial Time Light Curves to BJD_TBD Light Curves')
     parser.add_argument('Filename',help='Lightcurve file')
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the output .pdf and log file.")
-    parser.add_argument('-m', default=10.0,metavar="MAX",type=float ,help="Maximum Period to search in days (Default 10.0).")
-    parser.add_argument('-n', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")
+    parser.add_argument('-l', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")    
     parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls (Default ls).")
+    parser.add_argument('-u', default=10.0,metavar="MAX",type=float ,help="Maximum Period to search in days (Default 10.0).")
     parser.add_argument('-v', action='store_true',help="Increase verbosity")
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = lcurve_main(args['Filename'],basename=args['b'],max=args['m'],min=args['n'],ret_results=False,
-                      type=args['t'],verb=args['v'])
+    ret = lcurve_main(args['Filename'],basename=args['b'],min=args['l'],ret_results=False,
+                      type=args['t'],max=args['u'],verb=args['v'])
     sys.exit(0)
     
 ##
