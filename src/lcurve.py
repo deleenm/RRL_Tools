@@ -237,11 +237,17 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0
     
     f,axarr = plt.subplots(2,2,figsize=(8.5,11))
     f.subplots_adjust(hspace=0.3,top=0.94,bottom=0.05)
+    
+    #Plot in MJD 
+    if np.median(date) > 2400000:
+        pdate = date - 2400000.5
+    else:
+        pdate = date
     plt.suptitle(titlestring)
     axarr[0,0].set_title("Data")
-    axarr[0,0].plot(date,mag,myformat,ms=myptsize,c="blue",rasterized=True)
+    axarr[0,0].plot(pdate,mag,myformat,ms=myptsize,c="blue",rasterized=True)
     axarr[0,0].set_ylabel("KELT Magnitude")
-    axarr[0,0].set_xlabel("Date")
+    axarr[0,0].set_xlabel("MJD Date")
     axarr[0,0].invert_yaxis()
     #Periodogram
     axarr[0,1].set_title("Periodogram")
