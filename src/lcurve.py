@@ -16,7 +16,7 @@ Usage: lcurve.py
 # Standard library dependencies
 # -----------------------------
 import argparse
-import os.path
+import os
 import sys
 import time
 from subprocess import Popen
@@ -210,12 +210,32 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0
         lsperiod1 = 1.0/(lsstat['Fastchi2_Frequency_1_0'])[0]
         lsperiod2 = 1.0/(lsstat['Fastchi2_Frequency_2_0'])[0]   
 
+    #Generate Phases for each date
     lsphase1 = date/lsperiod1
     lsphase1 = (lsphase1 - np.floor(lsphase1))
-    lsphase1 = np.concatenate((lsphase1,lsphase1+1))
     lsphase2 = date/lsperiod2
-    lsphase2 = (lsphase2 - np.floor(lsphase2))
+    lsphase2 = (lsphase2 - np.floor(lsphase2))    
+    
+    #Write out a phase file (date, mag, err, phase)
+    if os.path.exists(name+'.phase1'):
+        os.remove(name+'.phase1')
+    
+    phasefile = open(name+'.phase1','w')
+    for i in range(len(date)):
+        phasefile.write("{} {} {} {:.5f}\n".format(date[i],mag[i],err[i],lsphase1[i]))
+    phasefile.close()
+    
+    if os.path.exists(name+'.phase2'):
+        os.remove(name+'.phase2')
+        
+    phasefile = open(name+'.phase2','w')
+    for i in range(len(date)):
+        phasefile.write("{} {} {} {:.5f}\n".format(date[i],mag[i],err[i],lsphase2[i]))
+    phasefile.close()    
+    
+    lsphase1 = np.concatenate((lsphase1,lsphase1+1))
     lsphase2 = np.concatenate((lsphase2,lsphase2+1))
+    
 
     nmag = np.concatenate((mag,mag))
 
@@ -252,15 +272,24 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',min=0
     #Periodogram
     axarr[0,1].set_title("Periodogram")
     if(type == 'ls'):
-        axarr[0,1].plot(np.log10(1.0/lsperiod['col1']),lsperiod['col2'],c="red",rasterized=True)
+        #Set power less than 0 t0 0.
+        periodogram = lsperiod['col2']
+        periodogram[periodogram < 0] = 0
+        axarr[0,1].plot(np.log10(1.0/lsperiod['col1']),periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("LS Power")
         axarr[0,1].set_xlabel("Log10 Period (days)")
     if(type == 'aov'):
-        axarr[0,1].plot(np.log10(aovperiod['Period']),aovperiod['AOV_WhitenCycle_0'],c="red",rasterized=True)
+        #Set power less than 0 t0 0.
+        periodogram = aovperiod['AOV_WhitenCycle_0']
+        periodogram[periodogram < 0] = 0
+        axarr[0,1].plot(np.log10(aovperiod['Period']),periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("AOV Power")
         axarr[0,1].set_xlabel("Log10 Period (days)")
     if(type == 'fchi2'):
-        axarr[0,1].plot(np.log10(1.0/fchi2period['Frequency']),fchi2period['Chireduction'],c="red",rasterized=True)
+        #Set power less than 0 t0 0.
+        periodogram = fchi2period['Chireduction']
+        periodogram[periodogram < 0] = 0
+        axarr[0,1].plot(np.log10(1.0/fchi2period['Frequency']),periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("Chi Power")
         axarr[0,1].set_xlabel("Log10 Period (days)")
 
