@@ -305,7 +305,7 @@ def get_phase(jd,period,jdmax=None):
     return phase
 
 
-def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
+def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,plot_clean_num=0):
     '''
     Plot curves if requested
     
@@ -317,6 +317,8 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
     Keywords:
         agg_tab: The aggregate points Table
         Errorbars: Whether to plot errorbars on data
+        Plot_clean_num: Number of highest and lowest y value points to remove, to make the plot look cleaner.
+                        Does not affect any calculation.
         
     Returns:
         None
@@ -335,31 +337,39 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False):
     curve_tab['phase_fixed'] = shift_phase(curve_tab['phase'],prop_dict['Phase_Max'])
     agg_tab['phase_fixed'] = shift_phase(agg_tab['phase'],prop_dict['Phase_Max'])
     
+    #Clean up the data
+    if(plot_clean_num != 0):
+        clean_idx = np.argsort(curve_tab['mag'])
+        clean_idx = clean_idx[plot_clean_num:]
+        clean_idx = clean_idx[:-plot_clean_num]
+        ccurve_tab = curve_tab[clean_idx]
+    else:
+        ccurve_tab = curve_tab[:]
     
     if type(agg_tab) == type(None):
         #Make plots without aggregated points
         
         if errorbars:
-            plt.errorbar(curve_tab['phase_fixed'],curve_tab['mag'],yerr=curve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed'],ccurve_tab['mag'],yerr=ccurve_tab['err'],
                          marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
-            plt.errorbar(curve_tab['phase_fixed']+1,curve_tab['mag'],yerr=curve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],yerr=ccurve_tab['err'],
                          marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
         else:
-            plt.plot(curve_tab['phase_fixed'],curve_tab['mag'],ptype,ms=psize,alpha=alpha,
+            plt.plot(ccurve_tab['phase_fixed'],ccurve_tab['mag'],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0')
-            plt.plot(curve_tab['phase_fixed']+1,curve_tab['mag'],ptype,ms=psize,alpha=alpha,
+            plt.plot(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0')
     else:
-        mask = curve_tab['mask']    
+        mask = ccurve_tab['mask']
         if errorbars:
-            plt.errorbar(curve_tab['phase_fixed'],curve_tab['mag'],yerr=curve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed'],ccurve_tab['mag'],yerr=ccurve_tab['err'],
                          marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
-            plt.errorbar(curve_tab['phase_fixed']+1,curve_tab['mag'],yerr=curve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],yerr=ccurve_tab['err'],
                          marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
         else:
-            plt.plot(curve_tab['phase_fixed'][mask],curve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
+            plt.plot(ccurve_tab['phase_fixed'][mask],ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0')
-            plt.plot(curve_tab['phase_fixed'][mask]+1,curve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
+            plt.plot(ccurve_tab['phase_fixed'][mask]+1,ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0')
         
         plt.errorbar(agg_tab['phase_fixed'],agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
@@ -483,7 +493,7 @@ def write_spline(base,spline_tab):
 # -------------
 # Main Function
 # -------------
-def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1,lower=None,method="Median",
+def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1,plot_clean_num=0,lower=None,method="Median",
                    npts=10,order=3,plot=False,ret_results=False,sigclip=None,upper=None,verb=False):
     #Set base filename
     if base == None:
@@ -528,7 +538,8 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
         (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,lower=lower,
                                             upper=upper,verb=verb)        
         if plot:
-            make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars) 
+            make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars,
+                      plot_clean_num=plot_clean_num)
             
     else:
         #Fit Spline
@@ -538,7 +549,7 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
         (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,lower=lower,
                                             upper=upper,verb=verb)
         if plot:
-            make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars) 
+            make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars, plot_clean_num=plot_clean_num)
     
     if verb:        
         print("{} Amplitude: {:.3f} Epoch Maximum: {:.6f}".format(filename,
@@ -562,6 +573,7 @@ if __name__ == '__main__':
                         ,help='Comma separated list of Date(s) to change into phases. (Default None)')
     parser.add_argument('-e', action='store_true',help="Show errorbars on Data")
     parser.add_argument('-f', default=1,type=float,metavar="FACTOR",help="Factor to tighten errorbars on aggregate 0 to 1 (Default 1)")
+    parser.add_argument('-k', default=0,type=int,metavar="NUM",help="Number of highest and lowest points to remove to make plots look cleaner (Default 0)")
     parser.add_argument('-l',default=None,type=float,metavar='JD',help='Find the epoch of minimum closest to this JD.')
     parser.add_argument('-m', metavar='METHOD',default="None"
                         ,help="Method to aggregate points: Mean, Median, Weighted_Mean, or None (Default None (e.g. no binning)")
@@ -577,7 +589,7 @@ if __name__ == '__main__':
 #Put this in a dictionary    
     args = vars(parser.parse_args())
     ret = spline_fit_main(args['filename'],args['period'],base=args['b'],dates=args['d'],errorbars=args['e']
-                          ,factor=args['f'],lower=args['l'],method=args['m'],npts=args['n'],order=args['o']
+                          ,factor=args['f'],plot_clean_num=args['k'],lower=args['l'],method=args['m'],npts=args['n'],order=args['o']
                           ,plot=args['p'],ret_results=False,sigclip=args['s'],upper=args['u'],verb=args['v'])
     sys.exit(0)
     
