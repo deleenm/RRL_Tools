@@ -112,7 +112,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
     #Return arrays coverting lists into numpy arrays as necessary
     return (np.array(final_phase),np.array(final_mag),np.array(final_err),final_num,final_clip)
 
-def calc_props(curve_tab,myspline,spline_phase,prop_dict,lower=None,upper=None,verb=False):
+def calc_props(curve_tab,myspline,spline_phase,prop_dict,flux=False,lower=None,upper=None,verb=False):
     '''
     Calculates lumin weighted magnitude, mag weighted magnitude, amplitude, Date of max from the Spline etc.
     
@@ -123,6 +123,7 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,lower=None,upper=None,v
         prop_dict: Dictionary of stellar properties to add to
         
     Keywords:
+        flux: Light curve is in flux units not magnitude units
         lower: A JD around which to find the Epoch of Minimum
         upper: A JD around which to find the Epoch of Maximum
         verb: Whether to be verbose
@@ -136,23 +137,42 @@ def calc_props(curve_tab,myspline,spline_phase,prop_dict,lower=None,upper=None,v
     spline_mag = myspline(spline_phase)
     
     prop_dict['Amplitude'] = np.max(spline_mag) - np.min(spline_mag)
-    prop_dict['Mag_Min'] = np.nanmin(spline_mag)
-    prop_dict['Mag_Max'] = np.nanmax(spline_mag)
+    
+    if flux:
+        prop_dict['Flux_Min'] = np.nanmin(spline_mag)
+        prop_dict['Flux_Max'] = np.nanmax(spline_mag)
+    else:
+        prop_dict['Mag_Min'] = np.nanmin(spline_mag)
+        prop_dict['Mag_Max'] = np.nanmax(spline_mag)
     
     #Calcluate Mag Weighted average
-    prop_dict['Mag_Ave'] = np.nanmean(spline_mag)
+    if flux:
+        prop_dict['Mag_Ave'] = np.nanmean(-2.5*np.log10(spline_mag))
+    else:    
+        prop_dict['Mag_Ave'] = np.nanmean(spline_mag)
     
     #Calculate Flux Weighted average
-    spline_flux = -2.5*10**spline_mag
-    prop_dict['Flux_Ave'] = np.log10(np.nanmean(spline_flux)/-2.5)
+    if flux:
+        prop_dict['Flux_Ave'] = np.nanmean(spline_mag)
+    else:    
+        spline_flux = -2.5*10**spline_mag
+        prop_dict['Flux_Ave'] = np.log10(np.nanmean(spline_flux)/-2.5)
     
-    #Find Phase of Maximum (Mags work backwards)
-    idx = np.nanargmin(spline_mag)
-    prop_dict['Phase_Max'] = spline_phase[idx]
+    #Find Phase of Maximum (Mags work backwards)   
+    if flux:
+        idx = np.nanargmax(spline_mag)
+        prop_dict['Phase_Max'] = spline_phase[idx]
+    else:
+        idx = np.nanargmin(spline_mag)
+        prop_dict['Phase_Max'] = spline_phase[idx]
     
     #Find Phase of Minimum (Mags work backwards)
-    idx = np.nanargmax(spline_mag)
-    prop_dict['Phase_Min'] = spline_phase[idx] 
+    if flux:
+        idx = np.nanargmin(spline_mag)
+        prop_dict['Phase_Min'] = spline_phase[idx] 
+    else:
+        idx = np.nanargmax(spline_mag)
+        prop_dict['Phase_Min'] = spline_phase[idx] 
       
     #Date of Maximum
     if upper == None:
@@ -305,7 +325,7 @@ def get_phase(jd,period,jdmax=None):
     return phase
 
 
-def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,plot_clean_num=0):
+def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flux=False,plot_clean_num=0,rast=False):
     '''
     Plot curves if requested
     
@@ -316,9 +336,11 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,plo
         pp: PDF pointer
     Keywords:
         agg_tab: The aggregate points Table
-        Errorbars: Whether to plot errorbars on data
-        Plot_clean_num: Number of highest and lowest y value points to remove, to make the plot look cleaner.
+        flux: The points a in flux units not magnitudes
+        errorbars: Whether to plot errorbars on data
+        plot_clean_num: Number of highest and lowest y value points to remove, to make the plot look cleaner.
                         Does not affect any calculation.
+        rast: Rasterize the plots because there are too many points
         
     Returns:
         None
@@ -351,39 +373,42 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,plo
         
         if errorbars:
             plt.errorbar(ccurve_tab['phase_fixed'],ccurve_tab['mag'],yerr=ccurve_tab['err'],
-                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
+                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0',rasterized=rast)
             plt.errorbar(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],yerr=ccurve_tab['err'],
-                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0')
+                         marker=ptype,ls='None',lw=.75,ms=psize,alpha=alpha,zorder=1,color='C0',rasterized=rast)
         else:
             plt.plot(ccurve_tab['phase_fixed'],ccurve_tab['mag'],ptype,ms=psize,alpha=alpha,
-                     zorder=1,color='C0')
+                     zorder=1,color='C0',rasterized=rast)
             plt.plot(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],ptype,ms=psize,alpha=alpha,
-                     zorder=1,color='C0')
+                     zorder=1,color='C0',rasterized=rast)
     else:
         mask = ccurve_tab['mask']
         if errorbars:
             plt.errorbar(ccurve_tab['phase_fixed'],ccurve_tab['mag'],yerr=ccurve_tab['err'],
-                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
+                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0',rasterized=rast)
             plt.errorbar(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],yerr=ccurve_tab['err'],
-                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0')
+                         marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0',rasterized=rast)
         else:
             plt.plot(ccurve_tab['phase_fixed'][mask],ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
-                     zorder=1,color='C0')
+                     zorder=1,color='C0',rasterized=rast)
             plt.plot(ccurve_tab['phase_fixed'][mask]+1,ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
-                     zorder=1,color='C0')
+                     zorder=1,color='C0',rasterized=rast)
         
         plt.errorbar(agg_tab['phase_fixed'],agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
-                     ls='None',lw=.75,ms=psize,zorder=2,color='C1')
+                     ls='None',lw=.75,ms=psize,zorder=2,color='C1',rasterized=rast)
         plt.errorbar(agg_tab['phase_fixed']+1,agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
-                     ls='None',lw=.75,ms=psize,zorder=2,color='C1')
+                     ls='None',lw=.75,ms=psize,zorder=2,color='C1',rasterized=rast)
         
     
     plt.plot(spline_tab['phase'],spline_tab['mag'],'--',zorder=3,color='red')
     plt.xlabel('Phase')
-    plt.ylabel('Magnitude')
     plt.axvline(1) #Epoch of Maximum
     plt.xlim(0,2)
-    plt.gca().invert_yaxis()
+    if flux:
+        plt.ylabel('Flux')    
+    else:
+        plt.ylabel('Magnitude')
+        plt.gca().invert_yaxis()
     plt.title('{} Period: {}\nAmp: {:.3f} Epoch_Max: {:6f}'.format(prop_dict['Starname'],prop_dict['Period'],
                                                        prop_dict['Amplitude'],prop_dict['Epoch_Max']))
     
@@ -391,7 +416,10 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,plo
         for phase in prop_dict['Phases']:
             plt.axvline(phase,ls='--',c='k')
     
-    pp.savefig()
+    if rast:
+        pp.savefig(dpi=200)
+    else:
+        pp.savefig()
 
 def read_curve(filename):
     mytable = Table()
@@ -431,7 +459,7 @@ def shift_phase(phase,phase_max):
     return new_phase
 
 
-def write_log(base,prop_dict,verb=False):
+def write_log(base,prop_dict,flux=False,verb=False):
     #Open Logfile
     try:
         logname = base + ".slog"
@@ -440,16 +468,29 @@ def write_log(base,prop_dict,verb=False):
         print("{} could not be opened!".format(logname))
 
     #Write out header
-    header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min,"
-    header = header + "Factor,Method,Order,Npts,Sigmaclip"
+    if flux:
+        header = "#Name,Period,Flux_Max,Flux_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min,"
+        header = header + "Factor,Method,Order,Npts,Sigmaclip"
+    else:
+        header = "#Name,Period,Mag_Max,Mag_Min,Amp,Ave(M),Ave(I),Epoch_Max,Epoch_Min,"
+        header = header + "Factor,Method,Order,Npts,Sigmaclip"
     if prop_dict['Dates'] != None:
         header = header + ",Dates,Phases\n"
     else:
         header = header + "\n"
         
     logfile.write(header)
-    
-    data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
+    if flux:
+        data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
+                                                        prop_dict['Period'],
+                                                        prop_dict['Flux_Max'],prop_dict['Flux_Min'],
+                                                        prop_dict['Amplitude'],prop_dict['Mag_Ave'],
+                                                        prop_dict['Flux_Ave'], prop_dict['Epoch_Max'],
+                                                        prop_dict['Epoch_Min'], prop_dict['Factor'],
+                                                        prop_dict['Method'],prop_dict['Order'],
+                                                        prop_dict['Npts'],prop_dict['Sigclip'])
+    else:
+        data = "{},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.6f},{:.6f},{},{},{},{},{}".format(prop_dict['Starname'],
                                                         prop_dict['Period'],
                                                         prop_dict['Mag_Max'],prop_dict['Mag_Min'],
                                                         prop_dict['Amplitude'],prop_dict['Mag_Ave'],
@@ -457,6 +498,8 @@ def write_log(base,prop_dict,verb=False):
                                                         prop_dict['Epoch_Min'], prop_dict['Factor'],
                                                         prop_dict['Method'],prop_dict['Order'],
                                                         prop_dict['Npts'],prop_dict['Sigclip'])
+    
+    
     
     if prop_dict['Dates'] != None:
         data = data + ",[{}],".format(prop_dict['Dates'].replace(',',';')) + np.array2string(prop_dict['Phases'],separator=';') + '\n'
@@ -493,8 +536,9 @@ def write_spline(base,spline_tab):
 # -------------
 # Main Function
 # -------------
-def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1,plot_clean_num=0,lower=None,method="Median",
-                   npts=10,order=3,plot=False,ret_results=False,sigclip=None,upper=None,verb=False):
+def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1,flux=False,plot_clean_num=0,lower=None
+                    ,method="Median",npts=10,order=3,plot=False,rast=False,ret_results=False,sigclip=None,upper=None
+                    ,verb=False):
     #Set base filename
     if base == None:
         base = os.path.splitext(filename)[0]
@@ -535,27 +579,28 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
         extend_num = int(np.floor(len(agg_tab['phase'])/10))
         myspline = get_spline(agg_tab['phase'],agg_tab['mag'], agg_tab['err']*factor,order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,npts*10)
-        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,lower=lower,
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,flux=flux,lower=lower,
                                             upper=upper,verb=verb)        
         if plot:
-            make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars,
-                      plot_clean_num=plot_clean_num)
+            make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars,flux=flux,
+                      plot_clean_num=plot_clean_num,rast=rast)
             
     else:
         #Fit Spline
         extend_num = int(np.floor(len(curve_tab['phase'])/10))
         myspline = get_spline(curve_tab['phase'],curve_tab['mag'], curve_tab['err'],order=order,extend_num=extend_num)
         spline_phase = np.linspace(0,1,len(curve_tab['phase'])*10)
-        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,lower=lower,
+        (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,flux=flux,lower=lower,
                                             upper=upper,verb=verb)
         if plot:
-            make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars, plot_clean_num=plot_clean_num)
+            make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars, flux=flux,plot_clean_num=plot_clean_num,
+                      rast=rast)
     
     if verb:        
         print("{} Amplitude: {:.3f} Epoch Maximum: {:.6f}".format(filename,
                                                                   prop_dict['Amplitude'],prop_dict['Epoch_Max']))
     
-    write_log(base,prop_dict,verb=verb)
+    write_log(base,prop_dict,flux=flux,verb=verb)
     write_spline(base,spline_tab)
 
     if plot:
@@ -579,18 +624,21 @@ if __name__ == '__main__':
                         ,help="Method to aggregate points: Mean, Median, Weighted_Mean, or None (Default None (e.g. no binning)")
     parser.add_argument('-n', default=20,type=int,metavar="NUM",help="Number of aggregate points to break data into.(Default 20)")
     parser.add_argument('-o', default=3,type=int,metavar="ORDER",help="Spline order betwee 1 and 5 (Default 3)")
+    parser.add_argument('-r', action='store_true',help="Rasterize plots")
     parser.add_argument('-s', default=None,type=float,metavar="SIGMA"
                         ,help="Sigmas used in sigma clipping. None for no sigma clipping (Default None)")
     parser.add_argument('-p', action='store_true',help="Generate plots")
     parser.add_argument('-u',default=None,type=float,metavar='JD',help='Find the epoch of maximum closest to this JD.')
+    parser.add_argument('-x', action='store_true',help="Curves are in Flux not Magnitude units")
     parser.add_argument('-v', action='store_true',help="Be Verbose")
 
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
     ret = spline_fit_main(args['filename'],args['period'],base=args['b'],dates=args['d'],errorbars=args['e']
-                          ,factor=args['f'],plot_clean_num=args['k'],lower=args['l'],method=args['m'],npts=args['n'],order=args['o']
-                          ,plot=args['p'],ret_results=False,sigclip=args['s'],upper=args['u'],verb=args['v'])
+                          ,factor=args['f'],flux=args['x'],plot_clean_num=args['k'],lower=args['l'],method=args['m']
+                          ,npts=args['n'],order=args['o'],plot=args['p'],rast=['r'],ret_results=False,sigclip=args['s'],upper=args['u']
+                          ,verb=args['v'])
     sys.exit(0)
     
 ##

@@ -34,7 +34,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 # --------------------
 # Function Definitions
 # --------------------
-def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=False,min=0.1, max=10.0):
+def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type='ls',log=False,min=0.1, max=10.0):
     '''
     Plot up a phased light curve based on a raw light curve adds plot to pdf object
     
@@ -44,6 +44,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
         pp: PDF Object
     Keywords:
         clean: How many maximum and minimum points to remove
+        flux: Use Flux units instead of Magnitude units
         log: Use a Log 10 days x-axis on the Periodogram
         max: Maximum Period to search
         min: Minimum Period to search
@@ -105,11 +106,16 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
         plt.title(titlestring)
         plt.plot(date,mag,myformat,ms=myptsize,c="blue",rasterized=True)
         plt.text(0,0,"No Lightcurves")
-        plt.ylabel("Magnitude")
         plt.xlabel("Date")
         plt.xlim(-5,5)
         plt.ylim(-5,5)
-        plt.gca().invert_yaxis()
+        if flux:
+            plt.ylabel("Flux")
+        else:
+            plt.ylabel("Magnitude")
+            plt.gca().invert_yaxis() 
+        
+        
         pp.savefig(dpi=200)
         plt.clf()
         print("No good data points: {}".format(curve) )
@@ -269,9 +275,13 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
     plt.suptitle(titlestring)
     axarr[0,0].set_title("Data")
     axarr[0,0].plot(pdate,mag,myformat,ms=myptsize,c="blue",rasterized=True)
-    axarr[0,0].set_ylabel("KELT Magnitude")
     axarr[0,0].set_xlabel("MJD Date")
-    axarr[0,0].invert_yaxis()
+    if flux:
+        axarr[0,0].set_ylabel("Flux")
+    else:
+        axarr[0,0].set_ylabel("Magnitude")
+        axarr[0,0].invert_yaxis() 
+
     #Periodogram
     axarr[0,1].set_title("Periodogram")
     if(type == 'ls'):
@@ -302,12 +312,18 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
     axarr[1,0].set_title("{} Period1: {}".format(ttype,fperiod1))
     axarr[1,0].plot(lsphase1,nmag,myformat,ms=myptsize,c="green",rasterized=True)
     axarr[1,0].set_xlabel("Phase")
-    axarr[1,0].invert_yaxis()
+    if flux:
+        axarr[1,0].set_ylabel("Flux")
+    else:
+        axarr[1,0].set_ylabel("Magnitude")
+        axarr[1,0].invert_yaxis() 
     #Period1
     axarr[1,1].set_title("{} Period2: {}".format(ttype,fperiod2))
     axarr[1,1].plot(lsphase2,nmag,myformat,ms=myptsize,c="green",rasterized=True)
     axarr[1,1].set_xlabel("Phase")
-    axarr[1,1].invert_yaxis()  
+    if not flux:
+        axarr[1,1].invert_yaxis() 
+      
     
     logfile.write("{},{},{},{},{},{},{}".format(curve,name,type,min,max,fperiod1,fperiod2))
     
@@ -325,7 +341,7 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
 # -------------
 # Main Function
 # -------------
-def lcurve_main(filename,basename=None,log=False,max=10.0,min=0.1,type='ls',ret_results=False,verb=False):
+def lcurve_main(filename,basename=None,flux=False,log=False,max=10.0,min=0.1,type='ls',ret_results=False,verb=False):
     '''
     Does a period search on a variable curve using the vartools package
     
@@ -333,6 +349,7 @@ def lcurve_main(filename,basename=None,log=False,max=10.0,min=0.1,type='ls',ret_
         filename: Curve file to be searched
     Keywords:
         basename: Give a basename for the output .pdf and log file.
+        flux: Data is in Flux units not Magnitude units
         log: Use a Log 10 days x-axis on the Periodogram
         max: Maximum Period to search
         min: Minimum Period to search
@@ -355,7 +372,7 @@ def lcurve_main(filename,basename=None,log=False,max=10.0,min=0.1,type='ls',ret_
         print("Output Filename: {}".format(newfilename))
     
     pp = PdfPages('{}'.format(newfilename))
-    results = plot_lc(filename,base,pp,clean=10,ret_results=ret_results,tdict=False,type=type,log=log,
+    results = plot_lc(filename,base,pp,clean=10,flux=flux,ret_results=ret_results,tdict=False,type=type,log=log,
                       min=min,max=max)
     
     pp.close()
@@ -369,6 +386,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert KELT Terrestrial Time Light Curves to BJD_TBD Light Curves')
     parser.add_argument('Filename',help='Lightcurve file')
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the output .pdf and log file.")
+    parser.add_argument('-f', action='store_true',help="Data is in Flux not Magnitudes")
     parser.add_argument('-g', action='store_true',help="Use a Log 10 days x-axis on periodogram")
     parser.add_argument('-l', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")    
     parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls (Default ls).")
@@ -377,7 +395,7 @@ if __name__ == '__main__':
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = lcurve_main(args['Filename'],basename=args['b'],log=args['g'],min=args['l'],ret_results=False,
+    ret = lcurve_main(args['Filename'],basename=args['b'],flux=args['f'],log=args['g'],min=args['l'],ret_results=False,
                       type=args['t'],max=args['u'],verb=args['v'])
     sys.exit(0)
     
