@@ -25,6 +25,7 @@ from subprocess import Popen
 # -------------------
 import numpy as np
 from astropy.table import Table
+from astropy.timeseries import LombScargle
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 # -----------------
@@ -213,6 +214,17 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
         fperiod1 = 1.0/(lsstat['Fastchi2_Frequency_1_0'])[0]
         fperiod2 = 1.0/(lsstat['Fastchi2_Frequency_2_0'])[0]   
 
+    if(type == 'apyls'):
+        ttype = 'Apy LS'
+        
+        apyls_freq,apyls_power = LombScargle(date, mag, err,nterms=1).autopower(
+                                    minimum_frequency=1.0/max, maximum_frequency=1.0/min,nyquist_factor=10)
+        
+        frequency1 = apyls_freq[np.argmax(apyls_power)]
+        fperiod1 = 1/frequency1
+        #Search 
+        fperiod2 = fperiod1/2 #Placeholder
+
     #Generate Phases for each date
     lsphase1 = date/fperiod1
     lsphase1 = (lsphase1 - np.floor(lsphase1))
@@ -292,7 +304,13 @@ def plot_lc(curve,name,pp,clean=10,tdict=False,ret_results=False,type='ls',log=F
         periodogram[periodogram < 0] = 0
         axarr[0,1].plot(1.0/fchi2period['Frequency'],periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("Chi Power")
-    
+    if(type == 'apyls'):
+        #Set power less than 0 t0 0.
+        periodogram = apyls_power
+        periodogram[periodogram < 0] = 0
+        axarr[0,1].plot(1.0/apyls_freq,periodogram,c="red",rasterized=True)
+        axarr[0,1].set_ylabel("Astropy LS Power")
+
     if log:
         axarr[0,1].set_xscale('log')    
 
@@ -336,7 +354,7 @@ def lcurve_main(filename,basename=None,log=False,max=10.0,min=0.1,type='ls',ret_
         log: Use a Log 10 days x-axis on the Periodogram
         max: Maximum Period to search
         min: Minimum Period to search
-        type: Type of period search aov,fchi2,ls default (ls).
+        type: Type of period search aov,fchi2,ls,apyls default (ls).
         ret_results: If True, return the results that would normally go to a log file.
         verb: If True, increase verbosity
         
@@ -371,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the output .pdf and log file.")
     parser.add_argument('-g', action='store_true',help="Use a Log 10 days x-axis on periodogram")
     parser.add_argument('-l', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")    
-    parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls (Default ls).")
+    parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls,apyls (Default ls).")
     parser.add_argument('-u', default=10.0,metavar="MAX",type=float ,help="Maximum Period to search in days (Default 10.0).")
     parser.add_argument('-v', action='store_true',help="Increase verbosity")
     
