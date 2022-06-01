@@ -345,6 +345,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
     
     logfile.write("{},{},{},{},{},{},{}".format(curve,name,type,min,max,fperiod1,fperiod2))
     
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
     pp.savefig(dpi=200)
     plt.clf()
     plt.close() #Frees up memory
