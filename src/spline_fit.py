@@ -565,7 +565,7 @@ def write_phase(base,curve_tab,agg_tab,flux=False):
     '''
     #Open Phase file
     try:
-        filename = base + ".splphase"
+        filename = base + ".sp.phase"
         phfile = open(filename,'w')
     except IOError:
         print("{} could not be opened!".format(filename))
@@ -592,7 +592,7 @@ def write_phase(base,curve_tab,agg_tab,flux=False):
     
         #Open Phase file
         try:
-            filename = base + ".splaggphase"
+            filename = base + ".sp.aggphase"
             phfile = open(filename,'w')
         except IOError:
             print("{} could not be opened!".format(filename))
