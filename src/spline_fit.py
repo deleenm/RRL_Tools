@@ -36,7 +36,44 @@ import scipy.interpolate as interp
 # --------------------
 # Function Definitions
 # --------------------
-def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
+def adjust_curve(curve_tab,prop_dict,agg_tab=None,flux=False,plot_clean_num=0):
+    '''
+    Removes high and low points and adjusts phase 0 to maximum
+    
+    Arguments:
+        curve_tab: The lightcurve Table
+        prop_dict: Dictionary of spline properties
+
+    Keywords:
+        agg_tab: The aggregate points Table
+        flux: The points a in flux units not magnitudes
+        plot_clean_num: Number of highest and lowest y value points to remove, to make the plot look cleaner.
+                        Does not affect any calculation.
+        
+    Returns:
+        None
+    '''
+    
+    #Correct phases, so phase_max = 0
+    curve_tab['phase_fixed'] = shift_phase(curve_tab['phase'],prop_dict['Phase_Max'])
+    agg_tab['phase_fixed'] = shift_phase(agg_tab['phase'],prop_dict['Phase_Max'])
+    
+    #Clean up the data
+    if(2*plot_clean_num >= len(curve_tab)):
+        print("Lightcurve has only {} epochs. {} is too many points to clean!".format(len(curve_tab),2*plot_clean_num))
+        print("Setting Plot Clean Num to 0.")
+        plot_clean_num = 0
+    
+    if(plot_clean_num != 0):
+        clean_idx = np.argsort(curve_tab['mag'])
+        clean_idx = clean_idx[plot_clean_num:]
+        clean_idx = clean_idx[:-plot_clean_num]
+        curve_tab['clean_idx'] = np.zeros(len(curve_tab),dtype=bool)
+        curve_tab['clean_idx'][clean_idx] = 1
+    else:
+        curve_tab['clean_idx'] = np.ones(len(curve_tab),dtype=bool)
+
+def calc_aggregate(phase,mag,err,num=100,method='Median',sigclip=None):
     '''
     Creates aggregate points that can be used to remove outliers and improve errorbars
     
@@ -47,7 +84,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
     Keywords:
         num: Number of aggregate points to divide the data into.
         sigclip: Set to a number to throw out all points more than that many sigma from the aggregation. Then recompute sigma
-        type: Type of aggregation: Mean, Median, and Weighted_Mean
+        method: Type of aggregation: Mean, Median, and Weighted_Mean
         
     Returns:
         A tuple of five numpy arrays. The first four give the phase,mag,err,num for each aggregate point. Num is the number of data points 
@@ -75,7 +112,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
             final_num.append(len(idx))
         else:
             good_ind = np.full(len(sample_mag),True)
-            if type=='Median':
+            if method=='Median':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
@@ -85,7 +122,7 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
                 agg = np.nanmedian(sample_mag)
                 #This is the standard error of the mean
                 agg_err = np.nanstd(sample_mag) / np.sqrt(totalgood)
-            if type=='Mean':
+            elif method=='Mean':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
@@ -96,13 +133,17 @@ def calc_aggregate(phase,mag,err,num=100,type='Median',sigclip=None):
                 #This is the standard error of the mean
                 agg_err = np.nanstd(sample_mag) / np.sqrt(totalgood) 
                 
-            if type=='Weighted_Mean':
+            elif method=='Weighted_Mean':
                 if sigclip != None:
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind] 
             
-                (agg,agg_err) = calc_weighted_stat(sample_mag, sample_err)    
+                (agg,agg_err) = calc_weighted_stat(sample_mag, sample_err)  
+            
+            else:
+                print("Fatal: Aggregated Point Method: {} is not a valid method!".format(method))
+                sys.exit(1)  
             
             final_clip[idx] = good_ind
             final_num.append(len(sample_mag))
@@ -325,7 +366,8 @@ def get_phase(jd,period,jdmax=None):
     return phase
 
 
-def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flux=False,plot_clean_num=0,rast=False):
+def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flux=False,plot_clean_num=0,rast=False
+              ,show_sigma=False):
     '''
     Plot curves if requested
     
@@ -341,6 +383,7 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flu
         plot_clean_num: Number of highest and lowest y value points to remove, to make the plot look cleaner.
                         Does not affect any calculation.
         rast: Rasterize the plots because there are too many points
+        Show_sigma: Display the points that were removed due to sigma-clipping using purple x
         
     Returns:
         None
@@ -354,20 +397,9 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flu
         alpha = 1
         psize = 2
         ptype = 'o'    
-    
-    #Correct phases, so phase_max = 0
-    curve_tab['phase_fixed'] = shift_phase(curve_tab['phase'],prop_dict['Phase_Max'])
-    agg_tab['phase_fixed'] = shift_phase(agg_tab['phase'],prop_dict['Phase_Max'])
-    
-    #Clean up the data
-    if(plot_clean_num != 0):
-        clean_idx = np.argsort(curve_tab['mag'])
-        clean_idx = clean_idx[plot_clean_num:]
-        clean_idx = clean_idx[:-plot_clean_num]
-        ccurve_tab = curve_tab[clean_idx]
-    else:
-        ccurve_tab = curve_tab[:]
-    
+        
+    ccurve_tab = curve_tab[curve_tab['clean_idx']]
+        
     if type(agg_tab) == type(None):
         #Make plots without aggregated points
         
@@ -383,16 +415,29 @@ def make_plot(curve_tab,spline_tab,prop_dict,pp,agg_tab=None,errorbars=False,flu
                      zorder=1,color='C0',rasterized=rast)
     else:
         mask = ccurve_tab['mask']
+        bmask = np.logical_not(mask)
+
         if errorbars:
-            plt.errorbar(ccurve_tab['phase_fixed'],ccurve_tab['mag'],yerr=ccurve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed'][mask],ccurve_tab['mag'][mask],yerr=ccurve_tab['err'][mask],
                          marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0',rasterized=rast)
-            plt.errorbar(ccurve_tab['phase_fixed']+1,ccurve_tab['mag'],yerr=ccurve_tab['err'],
+            plt.errorbar(ccurve_tab['phase_fixed'][mask]+1,ccurve_tab['mag'][mask],yerr=ccurve_tab['err'][mask],
                          marker='.',ls='None',lw=.75,ms=1.5,alpha=alpha,zorder=1,color='C0',rasterized=rast)
+            if show_sigma:
+                plt.errorbar(ccurve_tab['phase_fixed'][bmask],ccurve_tab['mag'][bmask],yerr=ccurve_tab['err'][bmask],
+                         marker='x',ls='None',lw=.75,ms=3,zorder=1,color='purple',rasterized=rast)
+                plt.errorbar(ccurve_tab['phase_fixed'][bmask]+1,ccurve_tab['mag'][bmask],yerr=ccurve_tab['err'][bmask],
+                         marker='x',ls='None',lw=.75,ms=3,zorder=1,color='purple',rasterized=rast)
+                
         else:
             plt.plot(ccurve_tab['phase_fixed'][mask],ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0',rasterized=rast)
             plt.plot(ccurve_tab['phase_fixed'][mask]+1,ccurve_tab['mag'][mask],ptype,ms=psize,alpha=alpha,
                      zorder=1,color='C0',rasterized=rast)
+            if show_sigma:
+                plt.plot(ccurve_tab['phase_fixed'][bmask],ccurve_tab['mag'][bmask],'x',ms=3,
+                     zorder=1,color='purple',rasterized=rast)
+                plt.plot(ccurve_tab['phase_fixed'][bmask]+1,ccurve_tab['mag'][bmask],'x',ms=3,
+                     zorder=1,color='purple',rasterized=rast)
         
         plt.errorbar(agg_tab['phase_fixed'],agg_tab['mag'],yerr=agg_tab['err'],marker=ptype,
                      ls='None',lw=.75,ms=psize,zorder=2,color='C1',rasterized=rast)
@@ -514,8 +559,67 @@ def write_log(base,prop_dict,flux=False,verb=False):
     
     logfile.close()
 
+def write_phase(base,curve_tab,agg_tab,flux=False):
+    '''
+    Helper function to write out phase file for the light curve and the aggregated curve if requested
+    '''
+    #Open Phase file
+    try:
+        filename = base + ".splphase"
+        phfile = open(filename,'w')
+    except IOError:
+        print("{} could not be opened!".format(filename))
+    
+    
+    #Write out header
+    if flux:
+        btype = 'Flux'
+    else:
+        btype = 'Mag'
+    
+    header = "#Date {} {}_err Phase Sigma_Clean Plot_Clean \n".format(btype,btype)
+    
+    phfile.write(header)
+    
+    for i in range(len(curve_tab)):
+        phfile.write("{} {} {} {:.5f} {} {}\n".format(curve_tab['date'][i],curve_tab['mag'][i],curve_tab['err'][i]
+                                              ,curve_tab['phase_fixed'][i],int(curve_tab['mask'][i])
+                                              ,int(curve_tab['clean_idx'][i])))
+    
+    phfile.close()
+
+    if type(agg_tab) != type(None):
+    
+        #Open Phase file
+        try:
+            filename = base + ".splaggphase"
+            phfile = open(filename,'w')
+        except IOError:
+            print("{} could not be opened!".format(filename))
+    
+    
+        #Write out header
+        if flux:
+            btype = 'Flux'
+        else:
+            btype = 'Mag'
+    
+        header = "#Phase {} {}_err \n".format(btype,btype)
+    
+        phfile.write(header)
+    
+        for i in range(len(agg_tab)):
+            phfile.write("{:.5f} {:.5f} {:.5f} \n".format(agg_tab['phase_fixed'][i],agg_tab['mag'][i],agg_tab['err'][i]))
+    
+        phfile.close()
+
+
 def write_spline(base,spline_tab):
-    #Open Logfile
+    '''
+    Helper function to write out spline file
+    '''   
+    
+    #Open spline file
     try:
         filename = base + ".spl"
         splfile = open(filename,'w')
@@ -536,9 +640,9 @@ def write_spline(base,spline_tab):
 # -------------
 # Main Function
 # -------------
-def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=1,flux=False,plot_clean_num=0,lower=None
-                    ,method="Median",npts=10,order=3,plot=False,rast=False,ret_results=False,sigclip=None,upper=None
-                    ,verb=False):
+def spline_fit_main(filename,period,phfile=False,base=None,dates=None,errorbars=False,factor=1,flux=False,plot_clean_num=0,lower=None
+                    ,method="Median",npts=10,order=3,plot=False,rast=False,ret_results=False,show_sigma=False
+                    ,sigclip=None,upper=None,verb=False):
     #Set base filename
     if base == None:
         base = os.path.splitext(filename)[0]
@@ -573,7 +677,7 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
     if method != 'None':
         #Create the Aggregated points
         (agg_tab['phase'],agg_tab['mag'], agg_tab['err'], agg_tab['num'],curve_tab['mask']) = calc_aggregate(
-            curve_tab['phase'],curve_tab['mag'],curve_tab['err'],num=npts,type='Median',sigclip=sigclip)
+            curve_tab['phase'],curve_tab['mag'],curve_tab['err'],num=npts,method=method,sigclip=sigclip)
  
         #Fit Spline
         extend_num = int(np.floor(len(agg_tab['phase'])/10))
@@ -581,9 +685,13 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
         spline_phase = np.linspace(0,1,npts*10)
         (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,flux=flux,lower=lower,
                                             upper=upper,verb=verb)        
+        
+        #Create updated phases etc.
+        adjust_curve(curve_tab,prop_dict,agg_tab=agg_tab,flux=flux,plot_clean_num=plot_clean_num)
+        
         if plot:
             make_plot(curve_tab, spline_tab, prop_dict, pp, agg_tab=agg_tab, errorbars=errorbars,flux=flux,
-                      plot_clean_num=plot_clean_num,rast=rast)
+                      plot_clean_num=plot_clean_num,rast=rast,show_sigma=show_sigma)
             
     else:
         #Fit Spline
@@ -592,9 +700,13 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
         spline_phase = np.linspace(0,1,len(curve_tab['phase'])*10)
         (prop_dict,spline_tab) = calc_props(curve_tab, myspline, spline_phase, prop_dict,flux=flux,lower=lower,
                                             upper=upper,verb=verb)
+        
+        #Create updated phases etc.
+        adjust_curve(curve_tab,prop_dict,agg_tab=agg_tab,flux=flux,plot_clean_num=plot_clean_num)
+        
         if plot:
             make_plot(curve_tab, spline_tab, prop_dict, pp, errorbars=errorbars, flux=flux,plot_clean_num=plot_clean_num,
-                      rast=rast)
+                      rast=rast,show_sigma=show_sigma)
     
     if verb:        
         print("{} Amplitude: {:.3f} Epoch Maximum: {:.6f}".format(filename,
@@ -602,7 +714,8 @@ def spline_fit_main(filename,period,base=None,dates=None,errorbars=False,factor=
     
     write_log(base,prop_dict,flux=flux,verb=verb)
     write_spline(base,spline_tab)
-
+    if phfile:
+        write_phase(base,curve_tab,agg_tab,flux=flux)
     if plot:
         pp.close()
     if ret_results:
@@ -613,6 +726,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Fits a Spline to a lightcurve.')
     parser.add_argument('filename',help='3 column light curve file JD Magnitude Error')
     parser.add_argument('period',type=float,help='The period to phase the light curve.')
+    parser.add_argument('-a', action='store_true',help="Leave the phased lightcurve")
     parser.add_argument('-b', default=None,metavar="BASENAME",help="Give a basename for the pdf and log files.")
     parser.add_argument('-d',type=str,default=None,metavar='DATE1,DATE2,etc'
                         ,help='Comma separated list of Date(s) to change into phases. (Default None)')
@@ -629,16 +743,16 @@ if __name__ == '__main__':
                         ,help="Sigmas used in sigma clipping. None for no sigma clipping (Default None)")
     parser.add_argument('-p', action='store_true',help="Generate plots")
     parser.add_argument('-u',default=None,type=float,metavar='JD',help='Find the epoch of maximum closest to this JD.')
-    parser.add_argument('-x', action='store_true',help="Curves are in Flux not Magnitude units")
     parser.add_argument('-v', action='store_true',help="Be Verbose")
-
+    parser.add_argument('-w', action='store_true',help="Show Sigma Clipped points.")
+    parser.add_argument('-x', action='store_true',help="Curves are in Flux not Magnitude units")
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = spline_fit_main(args['filename'],args['period'],base=args['b'],dates=args['d'],errorbars=args['e']
+    ret = spline_fit_main(args['filename'],args['period'],phfile=['a'],base=args['b'],dates=args['d'],errorbars=args['e']
                           ,factor=args['f'],flux=args['x'],plot_clean_num=args['k'],lower=args['l'],method=args['m']
-                          ,npts=args['n'],order=args['o'],plot=args['p'],rast=['r'],ret_results=False,sigclip=args['s'],upper=args['u']
-                          ,verb=args['v'])
+                          ,npts=args['n'],order=args['o'],plot=args['p'],rast=args['r'],ret_results=False,sigclip=args['s']
+                          ,show_sigma=args['w'],upper=args['u'],verb=args['v'])
     sys.exit(0)
     
 ##
