@@ -138,6 +138,7 @@ def calc_aggregate(phase,mag,err,num=100,method='Median',sigclip=None):
                     #Note True values in masks are invalid data, so reverse the sense
                     good_ind = np.logical_not((astats.sigma_clip(sample_mag, sigclip,maxiters=5)).mask)
                     sample_mag = sample_mag[good_ind] 
+                    sample_err = sample_err[good_ind] 
             
                 (agg,agg_err) = calc_weighted_stat(sample_mag, sample_err)  
             
