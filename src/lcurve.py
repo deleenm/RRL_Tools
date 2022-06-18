@@ -35,7 +35,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 # --------------------
 # Function Definitions
 # --------------------
-def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type='ls',log=False,min=0.1, max=10.0):
+def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,stype='ls',log=False
+            ,manual=None,min=0.1, max=10.0):
     '''
     Plot up a phased light curve based on a raw light curve adds plot to pdf object
     
@@ -47,13 +48,14 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         clean: How many maximum and minimum points to remove
         flux: Use Flux units instead of Magnitude units
         log: Use a Log 10 days x-axis on the Periodogram
+        manual: Use a manual period to plot light curve instead of searching for one.
         max: Maximum Period to search
         min: Minimum Period to search
         ret_results: If True, return the results of the period search
         tdict: A Dictionary of info to put in the title of the plots
-        type: Type of periodogram finder (ls or aov).
+        stype: Type of periodogram finder (ls or aov).
     Returns:
-        None unless ret_results is True, then returns a tuple of results (Filename,Starname,Type,Period1,Period2)
+        None unless ret_results is True, then returns a tuple of results (Filename,Starname,Stype,Period1,Period2)
     '''
 
     retval = 0
@@ -129,7 +131,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
     tmpcur.close()
     
     #Determine Period
-    if(type == 'ls'):
+    if(stype == 'ls'):
         ttype = "Lomb-Scargle"
         #should rewrite to communicate directly
         lstool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../ls.stat -header " + 
@@ -158,7 +160,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         fperiod1 = (lsstat['LS_Period_1_0'])[0]
         fperiod2 = (lsstat['LS_Period_2_0'])[0]
     
-    if(type == 'aov'):
+    elif(stype == 'aov'):
         ttype = 'AOV'
         aovtool = Popen(["vartools -i ../temp_lc.cur -ascii -redirectstats ../aov.stat -header -aov Nbin 20 " +
                          "{} {} 0.1 0.01 2 1 ../ whiten clip 5. 1".format(min,max)],shell=True)
@@ -189,7 +191,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         fperiod2 = (lsstat['Period_2_0'])[0]   
         
         
-    if(type == 'fchi2'):
+    elif(stype == 'fchi2'):
         ttype = 'FChi2'
         fchi2tool = Popen(["vartools -L /usr/local/share/vartools/USERLIBS/fastchi2.la -i ../temp_lc.cur " +
                          "-ascii -redirectstats ../fchi2.stat -header -fastchi2 " +
@@ -220,7 +222,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         fperiod1 = 1.0/(lsstat['Fastchi2_Frequency_1_0'])[0]
         fperiod2 = 1.0/(lsstat['Fastchi2_Frequency_2_0'])[0]   
 
-    if(type == 'apyls'):
+    elif(stype == 'apyls'):
         ttype = 'Apy LS'
         
         apyls_freq,apyls_power = LombScargle(date, mag, err,nterms=1).autopower(
@@ -230,6 +232,14 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         fperiod1 = 1/frequency1
         #Search 
         fperiod2 = fperiod1/2 #Placeholder
+
+    elif(stype == 'manual'):
+        ttype = 'Manual'
+        fperiod1 = manual
+        fperiod2 = manual  
+    
+    else:
+        print("Period Search type: {} is not a valid type.".format(stype))
 
     #Generate Phases for each date
     lsphase1 = date/fperiod1
@@ -268,7 +278,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         print("{} could not be opened!".format(filename))
 
     #Write out header
-    header = "#Filename,Starname,Type,Min_Period,Max_Period,Period1,Period2\n"
+    header = "#Filename,Starname,Stype,Min_Period,Max_Period,Period1,Period2\n"
     
     logfile.write(header)
 
@@ -296,31 +306,36 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
 
     #Periodogram
     axarr[0,1].set_title("Periodogram")
-    if(type == 'ls'):
+    if(stype == 'ls'):
         #Set power less than 0 t0 0.
         periodogram = lsperiod['col2']
         periodogram[periodogram < 0] = 0
         axarr[0,1].plot(1.0/lsperiod['col1'],periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("LS Power")
-    if(type == 'aov'):
+    elif(stype == 'aov'):
         #Set power less than 0 t0 0.
         periodogram = aovperiod['AOV_WhitenCycle_0']
         periodogram[periodogram < 0] = 0
         axarr[0,1].plot(aovperiod['Period'],periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("AOV Power")  
-    if(type == 'fchi2'):
+    elif(stype == 'fchi2'):
         #Set power less than 0 t0 0.
         periodogram = fchi2period['Chireduction']
         periodogram[periodogram < 0] = 0
         axarr[0,1].plot(1.0/fchi2period['Frequency'],periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("Chi Power")
-    if(type == 'apyls'):
+    elif(stype == 'apyls'):
         #Set power less than 0 t0 0.
         periodogram = apyls_power
         periodogram[periodogram < 0] = 0
         axarr[0,1].plot(1.0/apyls_freq,periodogram,c="red",rasterized=True)
         axarr[0,1].set_ylabel("Astropy LS Power")
-
+    else:
+        axarr[0,1].plot(np.nan,np.nan)
+        axarr[0,1].text(-2,0,"No Period Search")
+        axarr[0,1].set_xlabel("Date")
+        axarr[0,1].set_xlim(-5,5)
+        axarr[0,1].set_ylim(-5,5)
     if log:
         axarr[0,1].set_xscale('log')    
 
@@ -343,7 +358,7 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
         axarr[1,1].invert_yaxis() 
       
     
-    logfile.write("{},{},{},{},{},{},{}".format(curve,name,type,min,max,fperiod1,fperiod2))
+    logfile.write("{},{},{},{},{},{},{}".format(curve,name,stype,min,max,fperiod1,fperiod2))
     
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     pp.savefig(dpi=200)
@@ -353,14 +368,14 @@ def plot_lc(curve,name,pp,clean=10,flux=False,tdict=False,ret_results=False,type
     logfile.close()
     
     if ret_results == True:
-        return((curve,name,type,fperiod1,fperiod2))
+        return((curve,name,stype,fperiod1,fperiod2))
     else:
         return(retval) 
 
 # -------------
 # Main Function
 # -------------
-def lcurve_main(filename,basename=None,flux=False,log=False,max=10.0,min=0.1,type='ls',ret_results=False,verb=False):
+def lcurve_main(filename,basename=None,flux=False,log=False,manual=None,max=10.0,min=0.1,stype='ls',ret_results=False,verb=False):
     '''
     Does a period search on a variable curve using the vartools package
     
@@ -370,9 +385,10 @@ def lcurve_main(filename,basename=None,flux=False,log=False,max=10.0,min=0.1,typ
         basename: Give a basename for the output .pdf and log file.
         flux: Data is in Flux units not Magnitude units
         log: Use a Log 10 days x-axis on the Periodogram
+        Manual: Use a manual period instead of searching for the period.
         max: Maximum Period to search
         min: Minimum Period to search
-        type: Type of period search aov,fchi2,ls,apyls default (ls).
+        stype: Type of period search aov,fchi2,ls,apyls default (ls).
         ret_results: If True, return the results that would normally go to a log file.
         verb: If True, increase verbosity
         
@@ -386,13 +402,16 @@ def lcurve_main(filename,basename=None,flux=False,log=False,max=10.0,min=0.1,typ
     else:
         base = basename
         
+    if manual != None:
+        stype = 'manual'
+        
     newfilename = base+".pdf"
     if verb==True:
         print("Output Filename: {}".format(newfilename))
     
     pp = PdfPages('{}'.format(newfilename))
-    results = plot_lc(filename,base,pp,clean=10,flux=flux,ret_results=ret_results,tdict=False,type=type,log=log,
-                      min=min,max=max)
+    results = plot_lc(filename,base,pp,clean=10,flux=flux,ret_results=ret_results,tdict=False,stype=stype,log=log,
+                      manual=manual,min=min,max=max)
     
     pp.close()
     
@@ -408,14 +427,15 @@ if __name__ == '__main__':
     parser.add_argument('-f', action='store_true',help="Data is in Flux not Magnitudes")
     parser.add_argument('-g', action='store_true',help="Use a Log 10 days x-axis on periodogram")
     parser.add_argument('-l', default=0.1,metavar="MIN",type=float ,help="Minimum Period to search in days (Default 0.1).")    
-    parser.add_argument('-t', default='ls',metavar="TYPE" ,help="Type of period search aov,fchi2,ls,apyls (Default ls).")
+    parser.add_argument('-m', default=None,metavar="PERIOD",type=float ,help="Use a manual period to plot light curve.")
+    parser.add_argument('-t', default='ls',metavar="STYPE" ,help="Type of period search aov,fchi2,ls,apyls (Default ls).")
     parser.add_argument('-u', default=10.0,metavar="MAX",type=float ,help="Maximum Period to search in days (Default 10.0).")
     parser.add_argument('-v', action='store_true',help="Increase verbosity")
     
 #Put this in a dictionary    
     args = vars(parser.parse_args())
-    ret = lcurve_main(args['Filename'],basename=args['b'],flux=args['f'],log=args['g'],min=args['l'],ret_results=False,
-                      type=args['t'],max=args['u'],verb=args['v'])
+    ret = lcurve_main(args['Filename'],basename=args['b'],flux=args['f'],log=args['g'],manual=args['m'],min=args['l'],ret_results=False,
+                      stype=args['t'],max=args['u'],verb=args['v'])
     sys.exit(0)
     
 ##
